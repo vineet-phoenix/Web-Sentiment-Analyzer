@@ -7,4 +7,4 @@ scikit-learn
 seaborn
 streamlit
 crawl4ai
-playwright
+playwright==1.48.2
