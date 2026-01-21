@@ -1,0 +1,11 @@
+nltk
+kagglehub
+pandas
+tensorflow
+numpy
+textblob
+scikit-learn
+matplotlib
+seaborn
+streamlit
+crawl4ai
