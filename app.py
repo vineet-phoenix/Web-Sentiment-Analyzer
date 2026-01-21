@@ -2,6 +2,16 @@ import streamlit as st
 import asyncio
 import sys
 import os
+from concurrent.futures import ThreadPoolExecutor
+
+def run_async_in_new_loop(coro, *args, **kwargs):
+    import asyncio
+    loop = asyncio.new_event_loop()
+    try:
+        asyncio.set_event_loop(loop)
+        return loop.run_until_complete(coro(*args, **kwargs))
+    finally:
+        loop.close()
 
 # Add the current directory to the system path to import predict_emotion.py
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -44,16 +54,18 @@ url_input = st.text_area("Enter URL:", "https://www.imdb.com/title/tt15239678/re
 if st.button("Analyze Emotion"):
     if url_input:
         with st.spinner("Scraping content and predicting emotion..."):
-            scraped_content = asyncio.run(scrape_to_string_async(url_input))
+# use in Streamlit where you previously called asyncio.run(...)
+         with ThreadPoolExecutor(max_workers=1) as ex:
+          future = ex.submit(run_async_in_new_loop, scrape_to_string_async, url_input)
+          scraped_content = future.result()
+          st.subheader("Scraped Content (Markdown)")
+          st.markdown(scraped_content)
 
-            st.subheader("Scraped Content (Markdown)")
-            st.markdown(scraped_content)
-
-            if "Error scraping" not in scraped_content:
+          if "Error scraping" not in scraped_content:
                 predicted_emotion = predict_emotion(scraped_content)
                 st.subheader("Predicted Emotion:")
                 st.success(predicted_emotion)
-            else:
+          else:
                 st.error("Could not predict emotion due to scraping error.")
     else:
         st.warning("Please enter a URL.")
