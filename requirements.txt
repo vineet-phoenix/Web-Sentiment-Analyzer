@@ -9,3 +9,7 @@ matplotlib
 seaborn
 streamlit
 crawl4ai
+sys
+os
+asyncio
+json
