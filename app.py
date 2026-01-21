@@ -3,18 +3,6 @@ import asyncio
 import sys
 import os
 from concurrent.futures import ThreadPoolExecutor
-import subprocess
-
-def install_playwright():
-    try:
-        # Check if chromium already exists to avoid redundant installs
-        # Default path on Streamlit Cloud is /home/appuser/.cache/ms-playwright/
-        if not os.path.exists("/home/appuser/.cache/ms-playwright/"):
-            subprocess.run(["python", "-m", "playwright", "install", "chromium"], check=True)
-    except Exception as e:
-        st.error(f"Error installing Playwright: {e}")
-
-install_playwright()
 
 def run_async_in_new_loop(coro, *args, **kwargs):
     import asyncio
