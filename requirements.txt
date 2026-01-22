@@ -7,4 +7,4 @@ scikit-learn
 seaborn
 crawl4ai==0.4.248
 playwright>=1.49.0
-protobuf==3.20.x
+protobuf==3.20.3
