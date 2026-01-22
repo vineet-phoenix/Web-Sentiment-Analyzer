@@ -21,8 +21,18 @@ def run_async_in_new_loop(coro, *args, **kwargs):
 # Add the current directory to the system path to import predict_emotion.py
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from predict_emotion import predict_emotion # Assuming predict_emotion is in predict_emotion.py
-from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, CacheMode
+# Import functions from predict_emotion module
+from predict_emotion import predict_emotion, resolve_model_dir, load_tokenizer_and_model
+
+# Load model and tokenizer once at startup
+MODEL_DIR = resolve_model_dir(None)
+loaded_model, loaded_tokenizer = load_tokenizer_and_model(MODEL_DIR)
+
+if loaded_model is None or loaded_tokenizer is None:
+    st.warning(
+        "Model or tokenizer not found — predictions will be unavailable until you add the model files "
+        "(model .h5 and tokenizer.json) into the models/ directory or set MODEL_DIR environment variable."
+    )
 
 def ensure_playwright_browsers_installed():
     """
@@ -72,6 +82,9 @@ def fallback_scrape(url: str) -> str:
         content = soup.get_text(separator="\n", strip=True)
     return f"<!-- FALLBACK: simple requests scrape used -->\n\n{content}"
 
+# Import crawl4ai components after model loading to avoid mixing responsibilities
+from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, CacheMode
+
 # Asynchronous function to scrape content
 async def scrape_to_string_async(url: str) -> str:
     # Build BrowserConfig in a way that works across crawl4ai versions:
@@ -108,8 +121,6 @@ async def scrape_to_string_async(url: str) -> str:
     except Exception as e:
         # Surface the exception and fall back to a simpler scraper.
         err_str = str(e)
-        # Common runtime library error (missing system libs) will appear here,
-        # e.g., "error while loading shared libraries: libnspr4.so: cannot open shared object file"
         fallback_note = (
             "Playwright-style browser scraping failed with an error:\n\n"
             f"{err_str}\n\n"
@@ -128,7 +139,6 @@ async def scrape_to_string_async(url: str) -> str:
 st.title("Web Content Emotion Analyzer")
 st.write("Enter a URL below to scrape its content and predict the dominant emotion.")
 
-# Changed st.text_input to st.text_area
 url_input = st.text_area("Enter URL:", "https://www.imdb.com/title/tt15239678/reviews", height=100)
 
 if st.button("Analyze Emotion"):
@@ -146,22 +156,19 @@ if st.button("Analyze Emotion"):
                 scraped_content = future.result()
 
                 st.subheader("Scraped Content (Markdown)")
-                # If fallback annotated, it begins with a readable note; display raw markdown/text.
                 st.markdown(scraped_content)
 
-                if "Error scraping" not in scraped_content and "FALLBACK: simple requests scrape" not in scraped_content:
-                    # Prefer the original predict_emotion when Playwright/crawl4ai succeeded.
-                    predicted_emotion = predict_emotion(scraped_content)
-                    st.subheader("Predicted Emotion:")
-                    st.success(predicted_emotion)
-                else:
-                    # Even when fallback used, try to predict emotion from the text we have.
-                    try:
-                        predicted_emotion = predict_emotion(scraped_content)
-                        st.subheader("Predicted Emotion (from fallback content):")
+                # Call predict_emotion with the loaded model and tokenizer
+                try:
+                    predicted_emotion = predict_emotion(scraped_content, loaded_model, loaded_tokenizer)
+                    # predict_emotion returns an error string if model/tokenizer missing
+                    if isinstance(predicted_emotion, str) and predicted_emotion.startswith("Error:"):
+                        st.error(predicted_emotion)
+                    else:
+                        st.subheader("Predicted Emotion:")
                         st.success(predicted_emotion)
-                    except Exception as e:
-                        st.error("Could not predict emotion due to scraping or prediction error.")
-                        st.write(f"Prediction error: {e}")
+                except Exception as e:
+                    st.error("Could not predict emotion due to scraping or prediction error.")
+                    st.write(f"Prediction error: {e}")
     else:
         st.warning("Please enter a URL.")
