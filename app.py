@@ -47,11 +47,9 @@ def ensure_playwright_browsers_installed():
         cache_exists = False
 
     if not cache_exists:
-        # Provide UI feedback. Note: this may take some time to download the browser.
-        st.info("Playwright browser binaries not found. Installing Chromium (this may take a minute)...")
+        # Install silently; surface only errors
         try:
             subprocess.check_call([sys.executable, "-m", "playwright", "install", "chromium"])
-            st.success("Playwright Chromium installed successfully.")
         except subprocess.CalledProcessError as e:
             st.error(f"Failed to install Playwright browsers: {e}")
             raise
@@ -155,7 +153,7 @@ if st.button("Analyze Emotion"):
                 future = ex.submit(run_async_in_new_loop, scrape_to_string_async, url_input)
                 scraped_content = future.result()
 
-                st.subheader("Scraped Content (Markdown)")
+                # Display the scraped content directly (no extra header)
                 st.markdown(scraped_content)
 
                 # Call predict_emotion with the loaded model and tokenizer
