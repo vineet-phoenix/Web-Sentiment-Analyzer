@@ -22,7 +22,7 @@ from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, CacheMode
 # Asynchronous function to scrape content
 async def scrape_to_string_async(url: str) -> str:
     browser_config = BrowserConfig(
-        headless=True,
+        headless=False,
         enable_stealth=True,
         browser_type="chromium"
     )
