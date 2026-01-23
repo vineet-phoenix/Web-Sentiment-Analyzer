@@ -87,40 +87,64 @@ async def crawl4ai_fetch(url: str) -> str:
 def extract_relevant_text(raw_text: str, url: str) -> str:
     lines = [l.strip() for l in raw_text.splitlines() if l.strip()]
 
+    blocks = []
+    current = []
+
+    # 1️⃣ Build paragraph blocks
+    for line in lines:
+        if len(line) < 5:
+            if current:
+                blocks.append(" ".join(current))
+                current = []
+        else:
+            current.append(line)
+
+    if current:
+        blocks.append(" ".join(current))
+
     filtered = []
 
+    # 2️⃣ Site-aware filtering
     if "imdb.com" in url:
-        for l in lines:
-            if len(l) > 40 and not l.lower().startswith("helpful"):
-                filtered.append(l)
+        for b in blocks:
+            if len(b) > 80 and not b.lower().startswith("helpful"):
+                filtered.append(b)
 
     elif any(site in url for site in ["amazon.", "flipkart.", "myntra."]):
-        for l in lines:
-            if len(l) > 30 and "out of 5" not in l.lower():
-                filtered.append(l)
+        for b in blocks:
+            if len(b) > 60 and "out of 5" not in b.lower():
+                filtered.append(b)
 
     elif any(site in url for site in ["twitter.com", "x.com"]):
-        for l in lines:
-            if len(l) > 15 and not l.startswith("@"):
-                filtered.append(l)
+        for b in blocks:
+            if len(b) > 20 and not b.startswith("@"):
+                filtered.append(b)
 
     elif "reddit.com" in url:
-        for l in lines:
-            if len(l) > 20 and not l.lower().startswith("level"):
-                filtered.append(l)
+        for b in blocks:
+            if len(b) > 40 and not b.lower().startswith("level"):
+                filtered.append(b)
 
     else:
-        for l in lines:
-            if len(l) > 40:
-                filtered.append(l)
+        # 🔥 Generic fallback
+        for b in blocks:
+            if len(b) > 80:
+                filtered.append(b)
 
-    # Deduplicate
+    # 3️⃣ Absolute fallback (VERY IMPORTANT)
+    if not filtered:
+        filtered = [b for b in blocks if len(b) > 100]
+
+    if not filtered:
+        return ""
+
+    # 4️⃣ Deduplicate while preserving order
     seen = set()
     unique = []
-    for l in filtered:
-        if l not in seen:
-            unique.append(l)
-            seen.add(l)
+    for b in filtered:
+        if b not in seen:
+            unique.append(b)
+            seen.add(b)
 
     return "\n\n".join(unique)
 
