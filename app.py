@@ -54,43 +54,96 @@ def ensure_playwright():
 # CRAWL4AI SCRAPER (ASYNC, STABLE)
 # -------------------------------------------------
 
-async def crawl4ai_scrape(url: str) -> str:
+async def universal_text_scraper(url: str) -> str:
+    """
+    Universal text-only scraper for:
+    - Movie reviews
+    - Product reviews
+    - Social media text posts
+    """
+
+    # -----------------------------
+    # 1️⃣ Selector strategy
+    # -----------------------------
+    if "imdb.com" in url:
+        selectors = [
+            "div.ipc-html-content-inner-div",
+            "div[data-testid='review-card'] span"
+        ]
+
+    elif any(site in url for site in ["amazon.", "flipkart.", "myntra."]):
+        selectors = [
+            "span[data-hook='review-body']",
+            "div.review-text-content span",
+            "div.review-text"
+        ]
+
+    elif any(site in url for site in ["twitter.com", "x.com"]):
+        selectors = [
+            "article div[lang]"   # tweet text
+        ]
+
+    elif "reddit.com" in url:
+        selectors = [
+            "div[data-test-id='comment'] p",
+            "div[data-click-id='text']"
+        ]
+
+    else:
+        # 🔥 Generic semantic fallback
+        selectors = [
+            "article p",
+            "section p",
+            "div[role='article'] p",
+            "p"
+        ]
+
+    # -----------------------------
+    # 2️⃣ crawl4ai configs
+    # -----------------------------
+    browser_config = BrowserConfig(
+        headless=True,
+        browser_type="chromium"
+    )
+
+    run_config = CrawlerRunConfig(
+        remove_overlay_elements=True,
+        process_iframes=False,
+        disable_images=True,          # 🚫 avoids image context errors
+        cache_mode=CacheMode.BYPASS,
+        word_count_threshold=15,
+
+        # 🔥 Critical
+        wait_until="domcontentloaded",
+        page_timeout=90_000,
+
+        content_selectors=selectors
+    )
+
+    # -----------------------------
+    # 3️⃣ Run crawl
+    # -----------------------------
     try:
-        browser_config = BrowserConfig(
-            headless=True,
-            browser_type="chromium"
-        )
-
-        run_config = CrawlerRunConfig(
-            cache_mode=CacheMode.BYPASS,
-            word_count_threshold=20,
-            remove_overlay_elements=True,
-            process_iframes=True,
-
-            # 🔥 IMPORTANT FIXES
-            wait_until="domcontentloaded",   # ❌ NOT networkidle
-            page_timeout=90_000
-        )
-
         async with AsyncWebCrawler(config=browser_config) as crawler:
             result = await crawler.arun(url=url, config=run_config)
 
             if not result.success:
                 return f"Error scraping page: {result.error_message}"
 
-            content = (
+            text = (
                 result.markdown.fit_markdown
                 if hasattr(result.markdown, "fit_markdown")
                 else result.markdown
             )
 
-            if not content or not content.strip():
-                return "Error: Page loaded but no readable content extracted."
+            if not text or not text.strip():
+                return "Error: Page loaded but no relevant text found."
 
-            return content
+            return text
 
     except Exception as e:
-        return f"crawl4ai failed: {e}"
+        return f"crawl4ai scraping failed: {e}"
+
 
 # -------------------------------------------------
 # STREAMLIT UI
