@@ -1,12 +1,32 @@
 import streamlit as st
+import asyncio
 import sys
 import os
 import subprocess
 
-# --- Playwright (SYNC) ---
-from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
+from crawl4ai import (
+    AsyncWebCrawler,
+    BrowserConfig,
+    CrawlerRunConfig,
+    CacheMode
+)
 
-# Add current directory to path
+# -------------------------------------------------
+# 🔁 GLOBAL EVENT LOOP (CRITICAL FIX)
+# -------------------------------------------------
+
+@st.cache_resource
+def get_event_loop():
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    return loop
+
+loop = get_event_loop()
+
+# -------------------------------------------------
+# MODEL LOADING
+# -------------------------------------------------
+
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from predict_emotion import (
@@ -15,109 +35,92 @@ from predict_emotion import (
     load_tokenizer_and_model
 )
 
-# ------------------ MODEL LOAD ------------------
-
 MODEL_DIR = resolve_model_dir(None)
 loaded_model, loaded_tokenizer = load_tokenizer_and_model(MODEL_DIR)
 
 if loaded_model is None or loaded_tokenizer is None:
-    st.warning(
-        "Model or tokenizer not found. "
-        "Add model (.h5) and tokenizer.json to models/ directory."
+    st.warning("Model or tokenizer not found.")
+
+# -------------------------------------------------
+# PLAYWRIGHT INSTALL (SAFE)
+# -------------------------------------------------
+
+def ensure_playwright():
+    subprocess.check_call(
+        [sys.executable, "-m", "playwright", "install", "chromium"]
     )
 
-# ------------------ PLAYWRIGHT SETUP ------------------
+# -------------------------------------------------
+# CRAWL4AI SCRAPER (ASYNC, STABLE)
+# -------------------------------------------------
 
-def ensure_playwright_installed():
+async def crawl4ai_scrape(url: str) -> str:
     try:
-        subprocess.check_call(
-            [sys.executable, "-m", "playwright", "install", "chromium"]
+        browser_config = BrowserConfig(
+            headless=True,
+            browser_type="chromium"
         )
-    except Exception as e:
-        raise RuntimeError(f"Playwright install failed: {e}")
 
-# ------------------ SCRAPER (SYNC) ------------------
+        run_config = CrawlerRunConfig(
+            cache_mode=CacheMode.BYPASS,
+            word_count_threshold=20,
+            remove_overlay_elements=True,
+            process_iframes=True,
 
-def scrape_with_playwright(url: str) -> str:
-    try:
-        with sync_playwright() as p:
-            browser = p.chromium.launch(
-                headless=True,
-                args=["--disable-blink-features=AutomationControlled"]
+            # 🔥 IMPORTANT FIXES
+            wait_until="domcontentloaded",   # ❌ NOT networkidle
+            page_timeout=90_000
+        )
+
+        async with AsyncWebCrawler(config=browser_config) as crawler:
+            result = await crawler.arun(url=url, config=run_config)
+
+            if not result.success:
+                return f"Error scraping page: {result.error_message}"
+
+            content = (
+                result.markdown.fit_markdown
+                if hasattr(result.markdown, "fit_markdown")
+                else result.markdown
             )
 
-            context = browser.new_context(
-                user_agent=(
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/120 Safari/537.36"
-                )
-            )
-
-            page = context.new_page()
-
-            page.goto(url, timeout=60000, wait_until="domcontentloaded")
-            page.wait_for_load_state("networkidle", timeout=30000)
-
-            # Remove overlays / modals
-            page.evaluate("""
-                () => {
-                    document.querySelectorAll(
-                        '[role="dialog"], .modal, .overlay'
-                    ).forEach(e => e.remove());
-                }
-            """)
-
-            # Extract readable text
-            content = page.evaluate("""
-                () => {
-                    const tags = document.querySelectorAll(
-                        'h1,h2,h3,p'
-                    );
-                    return Array.from(tags)
-                        .map(t => t.innerText.trim())
-                        .filter(Boolean)
-                        .join('\\n\\n');
-                }
-            """)
-
-            browser.close()
-
-            if not content.strip():
-                return "Error: Page loaded but no readable content found."
+            if not content or not content.strip():
+                return "Error: Page loaded but no readable content extracted."
 
             return content
 
-    except PlaywrightTimeout:
-        return "Error: Page load timed out."
     except Exception as e:
-        return f"Playwright scraping failed: {e}"
+        return f"crawl4ai failed: {e}"
 
-# ------------------ STREAMLIT UI ------------------
+# -------------------------------------------------
+# STREAMLIT UI
+# -------------------------------------------------
 
-st.title("Web Content Emotion Analyzer")
-st.write("Scrape a webpage using Playwright and predict its dominant emotion.")
+st.title("Web Content Emotion Analyzer (crawl4ai)")
+st.write("JS-aware scraping using crawl4ai + Playwright")
 
-url_input = st.text_area(
+url = st.text_area(
     "Enter URL",
     "https://www.imdb.com/title/tt15239678/reviews",
     height=100
 )
 
 if st.button("Analyze Emotion"):
-    if not url_input:
+    if not url:
         st.warning("Please enter a URL.")
         st.stop()
 
-    with st.spinner("Installing Playwright (if needed)..."):
+    with st.spinner("Ensuring Playwright is available..."):
         try:
-            ensure_playwright_installed()
+            ensure_playwright()
         except Exception as e:
-            st.error(e)
+            st.error(f"Playwright install failed: {e}")
             st.stop()
 
-    with st.spinner("Scraping webpage..."):
-        scraped_content = scrape_with_playwright(url_input)
+    with st.spinner("Scraping webpage with crawl4ai..."):
+        scraped_content = loop.run_until_complete(
+            crawl4ai_scrape(url)
+        )
 
     if scraped_content.startswith("Error"):
         st.error(scraped_content)
@@ -141,4 +144,4 @@ if st.button("Analyze Emotion"):
                 st.success(emotion)
 
         except Exception as e:
-            st.error(f"Emotion prediction failed: {e}")
+            st.error(f"Prediction failed: {e}")
