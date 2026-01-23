@@ -15,3 +15,5 @@ libpangocairo-1.0-0
 libpango-1.0-0
 fonts-liberation
 ca-certificates
+libxrender1 
+libxkbcommon0 
