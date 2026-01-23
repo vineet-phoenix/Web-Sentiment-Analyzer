@@ -53,7 +53,6 @@ def ensure_playwright():
 # -------------------------------------------------
 # CRAWL4AI SCRAPER (ASYNC, STABLE)
 # -------------------------------------------------
-
 async def universal_text_scraper(url: str) -> str:
     """
     Universal text-only scraper for:
@@ -80,7 +79,7 @@ async def universal_text_scraper(url: str) -> str:
 
     elif any(site in url for site in ["twitter.com", "x.com"]):
         selectors = [
-            "article div[lang]"   # tweet text
+            "article div[lang]"
         ]
 
     elif "reddit.com" in url:
@@ -90,7 +89,6 @@ async def universal_text_scraper(url: str) -> str:
         ]
 
     else:
-        # 🔥 Generic semantic fallback
         selectors = [
             "article p",
             "section p",
@@ -109,11 +107,10 @@ async def universal_text_scraper(url: str) -> str:
     run_config = CrawlerRunConfig(
         remove_overlay_elements=True,
         process_iframes=False,
-        disable_images=True,          # 🚫 avoids image context errors
         cache_mode=CacheMode.BYPASS,
         word_count_threshold=15,
 
-        # 🔥 Critical
+        # ⚠ crawl4ai 0.8.0 SAFE ARGS
         wait_until="domcontentloaded",
         page_timeout=90_000,
 
@@ -143,7 +140,6 @@ async def universal_text_scraper(url: str) -> str:
 
     except Exception as e:
         return f"crawl4ai scraping failed: {e}"
-
 
 # -------------------------------------------------
 # STREAMLIT UI
