@@ -172,7 +172,7 @@ if st.button("Analyze Emotion"):
 
     with st.spinner("Scraping webpage with crawl4ai..."):
         scraped_content = loop.run_until_complete(
-            crawl4ai_scrape(url)
+            universal_text_scraper(url)
         )
 
     if scraped_content.startswith("Error"):
