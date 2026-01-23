@@ -53,52 +53,7 @@ def ensure_playwright():
 # -------------------------------------------------
 # CRAWL4AI SCRAPER (ASYNC, STABLE)
 # -------------------------------------------------
-async def universal_text_scraper(url: str) -> str:
-    """
-    Universal text-only scraper for:
-    - Movie reviews
-    - Product reviews
-    - Social media text posts
-    """
-
-    # -----------------------------
-    # 1️⃣ Selector strategy
-    # -----------------------------
-    if "imdb.com" in url:
-        selectors = [
-            "div.ipc-html-content-inner-div",
-            "div[data-testid='review-card'] span"
-        ]
-
-    elif any(site in url for site in ["amazon.", "flipkart.", "myntra."]):
-        selectors = [
-            "span[data-hook='review-body']",
-            "div.review-text-content span",
-            "div.review-text"
-        ]
-
-    elif any(site in url for site in ["twitter.com", "x.com"]):
-        selectors = [
-            "article div[lang]"
-        ]
-
-    elif "reddit.com" in url:
-        selectors = [
-            "div[data-test-id='comment'] p",
-            "div[data-click-id='text']"
-        ]
-
-    else:
-        selectors = [
-            "article p",
-            "section p",
-            "div[role='article'] p",
-            "p"
-        ]
-
-    # -----------------------------
-    # 2️⃣ crawl4ai configs
-    # -----------------------------
+async def crawl4ai_fetch(url: str) -> str:
     browser_config = BrowserConfig(
         headless=True,
         browser_type="chromium"
@@ -108,38 +63,79 @@ async def universal_text_scraper(url: str) -> str:
         remove_overlay_elements=True,
         process_iframes=False,
         cache_mode=CacheMode.BYPASS,
-        word_count_threshold=15,
+        word_count_threshold=10,
 
-        # ⚠ crawl4ai 0.8.0 SAFE ARGS
+        # IMPORTANT: safe args only
         wait_until="domcontentloaded",
-        page_timeout=90_000,
-
-        content_selectors=selectors
+        page_timeout=90_000
     )
 
-    # -----------------------------
-    # 3️⃣ Run crawl
-    # -----------------------------
-    try:
-        async with AsyncWebCrawler(config=browser_config) as crawler:
-            result = await crawler.arun(url=url, config=run_config)
+    async with AsyncWebCrawler(config=browser_config) as crawler:
+        result = await crawler.arun(url=url, config=run_config)
 
-            if not result.success:
-                return f"Error scraping page: {result.error_message}"
+        if not result.success:
+            return f"Error scraping page: {result.error_message}"
 
-            text = (
-                result.markdown.fit_markdown
-                if hasattr(result.markdown, "fit_markdown")
-                else result.markdown
-            )
+        text = (
+            result.markdown.fit_markdown
+            if hasattr(result.markdown, "fit_markdown")
+            else result.markdown
+        )
 
-            if not text or not text.strip():
-                return "Error: Page loaded but no relevant text found."
+        return text
+        
+def extract_relevant_text(raw_text: str, url: str) -> str:
+    lines = [l.strip() for l in raw_text.splitlines() if l.strip()]
 
-            return text
+    filtered = []
 
-    except Exception as e:
-        return f"crawl4ai scraping failed: {e}"
+    if "imdb.com" in url:
+        for l in lines:
+            if len(l) > 40 and not l.lower().startswith("helpful"):
+                filtered.append(l)
+
+    elif any(site in url for site in ["amazon.", "flipkart.", "myntra."]):
+        for l in lines:
+            if len(l) > 30 and "out of 5" not in l.lower():
+                filtered.append(l)
+
+    elif any(site in url for site in ["twitter.com", "x.com"]):
+        for l in lines:
+            if len(l) > 15 and not l.startswith("@"):
+                filtered.append(l)
+
+    elif "reddit.com" in url:
+        for l in lines:
+            if len(l) > 20 and not l.lower().startswith("level"):
+                filtered.append(l)
+
+    else:
+        for l in lines:
+            if len(l) > 40:
+                filtered.append(l)
+
+    # Deduplicate
+    seen = set()
+    unique = []
+    for l in filtered:
+        if l not in seen:
+            unique.append(l)
+            seen.add(l)
+
+    return "\n\n".join(unique)
+
+async def universal_review_scraper(url: str) -> str:
+    raw = await crawl4ai_fetch(url)
+
+    if raw.startswith("Error"):
+        return raw
+
+    clean = extract_relevant_text(raw, url)
+
+    if not clean.strip():
+        return "Error: No review or post text found."
+
+    return clean
 
 # -------------------------------------------------
 # STREAMLIT UI
@@ -168,9 +164,8 @@ if st.button("Analyze Emotion"):
 
     with st.spinner("Scraping webpage with crawl4ai..."):
         scraped_content = loop.run_until_complete(
-            universal_text_scraper(url)
-        )
-
+    universal_review_scraper(url)
+)
     if scraped_content.startswith("Error"):
         st.error(scraped_content)
         st.stop()
