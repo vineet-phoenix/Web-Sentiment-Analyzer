@@ -1,100 +1,105 @@
 import streamlit as st
-import asyncio
 import sys
 import os
 import subprocess
-from concurrent.futures import ThreadPoolExecutor
 
-def run_async_in_new_loop(coro, *args, **kwargs):
-    loop = asyncio.new_event_loop()
-    try:
-        asyncio.set_event_loop(loop)
-        return loop.run_until_complete(coro(*args, **kwargs))
-    finally:
-        loop.close()
+# --- Playwright (SYNC) ---
+from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
 
-# Add the current directory to the system path
+# Add current directory to path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
-from predict_emotion import predict_emotion, resolve_model_dir, load_tokenizer_and_model
+from predict_emotion import (
+    predict_emotion,
+    resolve_model_dir,
+    load_tokenizer_and_model
+)
 
-# Load model and tokenizer once
+# ------------------ MODEL LOAD ------------------
+
 MODEL_DIR = resolve_model_dir(None)
 loaded_model, loaded_tokenizer = load_tokenizer_and_model(MODEL_DIR)
 
 if loaded_model is None or loaded_tokenizer is None:
     st.warning(
-        "Model or tokenizer not found — predictions will be unavailable until you add the model files "
-        "(model .h5 and tokenizer.json) into the models/ directory or set MODEL_DIR environment variable."
+        "Model or tokenizer not found. "
+        "Add model (.h5) and tokenizer.json to models/ directory."
     )
 
-def ensure_playwright_browsers_installed():
-    cache_dir = os.path.expanduser("~/.cache/ms-playwright")
-    try:
-        cache_exists = os.path.exists(cache_dir) and any(os.scandir(cache_dir))
-    except Exception:
-        cache_exists = False
+# ------------------ PLAYWRIGHT SETUP ------------------
 
-    if not cache_exists:
-        st.info("Installing Playwright Chromium (this may take a minute)...")
+def ensure_playwright_installed():
+    try:
         subprocess.check_call(
             [sys.executable, "-m", "playwright", "install", "chromium"]
         )
-        st.success("Playwright Chromium installed.")
+    except Exception as e:
+        raise RuntimeError(f"Playwright install failed: {e}")
 
-from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, CacheMode
+# ------------------ SCRAPER (SYNC) ------------------
 
-async def scrape_to_string_async(url: str) -> str:
+def scrape_with_playwright(url: str) -> str:
     try:
-        try:
-            browser_config = BrowserConfig(
+        with sync_playwright() as p:
+            browser = p.chromium.launch(
                 headless=True,
-                enable_stealth=True,
-                browser_type="chromium"
-            )
-        except TypeError:
-            browser_config = BrowserConfig(
-                headless=True,
-                browser_type="chromium"
+                args=["--disable-blink-features=AutomationControlled"]
             )
 
-        run_config = CrawlerRunConfig(
-            cache_mode=CacheMode.BYPASS,
-            word_count_threshold=10,
-            remove_overlay_elements=True,
-            process_iframes=True
-        )
-
-        async with AsyncWebCrawler(config=browser_config) as crawler:
-            result = await crawler.arun(url=url, config=run_config)
-
-            if not result.success:
-                return f"Error scraping {url}: {result.error_message}"
-
-            content = (
-                result.markdown.fit_markdown
-                if getattr(result.markdown, "fit_markdown", None)
-                else result.markdown
+            context = browser.new_context(
+                user_agent=(
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/120 Safari/537.36"
+                )
             )
 
-            if not content or not content.strip():
-                return "Error: Scraping succeeded but no content was extracted."
+            page = context.new_page()
+
+            page.goto(url, timeout=60000, wait_until="domcontentloaded")
+            page.wait_for_load_state("networkidle", timeout=30000)
+
+            # Remove overlays / modals
+            page.evaluate("""
+                () => {
+                    document.querySelectorAll(
+                        '[role="dialog"], .modal, .overlay'
+                    ).forEach(e => e.remove());
+                }
+            """)
+
+            # Extract readable text
+            content = page.evaluate("""
+                () => {
+                    const tags = document.querySelectorAll(
+                        'h1,h2,h3,p'
+                    );
+                    return Array.from(tags)
+                        .map(t => t.innerText.trim())
+                        .filter(Boolean)
+                        .join('\\n\\n');
+                }
+            """)
+
+            browser.close()
+
+            if not content.strip():
+                return "Error: Page loaded but no readable content found."
 
             return content
 
+    except PlaywrightTimeout:
+        return "Error: Page load timed out."
     except Exception as e:
-        return (
-            "Playwright scraping failed.\n\n"
-            f"Error details:\n{e}\n\n"
-            "Ensure all required system dependencies for Chromium are installed."
-        )
+        return f"Playwright scraping failed: {e}"
 
-# Streamlit UI
+# ------------------ STREAMLIT UI ------------------
+
 st.title("Web Content Emotion Analyzer")
-st.write("Enter a URL to scrape its content and predict the dominant emotion.")
+st.write("Scrape a webpage using Playwright and predict its dominant emotion.")
 
 url_input = st.text_area(
-    "Enter URL:",
+    "Enter URL",
     "https://www.imdb.com/title/tt15239678/reviews",
     height=100
 )
@@ -102,42 +107,38 @@ url_input = st.text_area(
 if st.button("Analyze Emotion"):
     if not url_input:
         st.warning("Please enter a URL.")
-    else:
-        with st.spinner("Scraping content and predicting emotion..."):
-            try:
-                ensure_playwright_browsers_installed()
-            except Exception as e:
-                st.error(f"Playwright setup failed: {e}")
-                st.stop()
+        st.stop()
 
-            with ThreadPoolExecutor(max_workers=1) as ex:
-                future = ex.submit(
-                    run_async_in_new_loop,
-                    scrape_to_string_async,
-                    url_input
-                )
-                scraped_content = future.result()
+    with st.spinner("Installing Playwright (if needed)..."):
+        try:
+            ensure_playwright_installed()
+        except Exception as e:
+            st.error(e)
+            st.stop()
 
-            if scraped_content.startswith("Error"):
-                st.error(scraped_content)
-                st.stop()
+    with st.spinner("Scraping webpage..."):
+        scraped_content = scrape_with_playwright(url_input)
 
-            st.subheader("Scraped Content (Markdown)")
-            st.markdown(scraped_content)
+    if scraped_content.startswith("Error"):
+        st.error(scraped_content)
+        st.stop()
 
-            try:
-                predicted_emotion = predict_emotion(
-                    scraped_content,
-                    loaded_model,
-                    loaded_tokenizer
-                )
+    st.subheader("Scraped Content")
+    st.markdown(scraped_content)
 
-                if isinstance(predicted_emotion, str) and predicted_emotion.startswith("Error"):
-                    st.error(predicted_emotion)
-                else:
-                    st.subheader("Predicted Emotion")
-                    st.success(predicted_emotion)
+    with st.spinner("Predicting emotion..."):
+        try:
+            emotion = predict_emotion(
+                scraped_content,
+                loaded_model,
+                loaded_tokenizer
+            )
 
-            except Exception as e:
-                st.error(f"Prediction failed: {e}")
+            if isinstance(emotion, str) and emotion.startswith("Error"):
+                st.error(emotion)
+            else:
+                st.subheader("Predicted Emotion")
+                st.success(emotion)
 
+        except Exception as e:
+            st.error(f"Emotion prediction failed: {e}")
