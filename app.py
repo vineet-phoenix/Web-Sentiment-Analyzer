@@ -10,7 +10,7 @@ from crawl4ai import (
     CrawlerRunConfig,
     CacheMode
 )
-
+"""
 # -------------------------------------------------
 # 🔁 GLOBAL EVENT LOOP (CRITICAL FIX)
 # -------------------------------------------------
@@ -22,7 +22,7 @@ def get_event_loop():
     return loop
 
 loop = get_event_loop()
-
+"""
 # -------------------------------------------------
 # MODEL LOADING
 # -------------------------------------------------
@@ -44,7 +44,7 @@ if loaded_model is None or loaded_tokenizer is None:
 # -------------------------------------------------
 # PLAYWRIGHT INSTALL (SAFE)
 # -------------------------------------------------
-
+"""
 def ensure_playwright():
     subprocess.check_call(
         [sys.executable, "-m", "playwright", "install", "chromium"]
@@ -160,7 +160,7 @@ async def universal_review_scraper(url: str) -> str:
         return "Error: No review or post text found."
 
     return clean
-
+"""
 # -------------------------------------------------
 # STREAMLIT UI
 # -------------------------------------------------
@@ -170,7 +170,6 @@ st.write("JS-aware scraping using crawl4ai + Playwright")
 
 url = st.text_area(
     "Enter URL",
-    "https://www.imdb.com/title/tt15239678/reviews",
     height=100
 )
 
@@ -178,7 +177,7 @@ if st.button("Analyze Emotion"):
     if not url:
         st.warning("Please enter a URL.")
         st.stop()
-
+"""
     with st.spinner("Ensuring Playwright is available..."):
         try:
             ensure_playwright()
@@ -196,11 +195,11 @@ if st.button("Analyze Emotion"):
 
     st.subheader("Scraped Content")
     st.markdown(scraped_content)
-
+"""
     with st.spinner("Predicting emotion..."):
         try:
             emotion = predict_emotion(
-                scraped_content,
+                url,
                 loaded_model,
                 loaded_tokenizer
             )
