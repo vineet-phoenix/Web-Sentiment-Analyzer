@@ -10,19 +10,19 @@ from crawl4ai import (
     CrawlerRunConfig,
     CacheMode
 )
-"""
+
 # -------------------------------------------------
 # 🔁 GLOBAL EVENT LOOP (CRITICAL FIX)
 # -------------------------------------------------
 
-@st.cache_resource
-def get_event_loop():
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    return loop
+#@st.cache_resource
+#def get_event_loop():
+#    loop = asyncio.new_event_loop()
+#    asyncio.set_event_loop(loop)
+#    return loop
 
-loop = get_event_loop()
-"""
+#loop = get_event_loop()
+
 # -------------------------------------------------
 # MODEL LOADING
 # -------------------------------------------------
@@ -44,123 +44,123 @@ if loaded_model is None or loaded_tokenizer is None:
 # -------------------------------------------------
 # PLAYWRIGHT INSTALL (SAFE)
 # -------------------------------------------------
-"""
-def ensure_playwright():
-    subprocess.check_call(
-        [sys.executable, "-m", "playwright", "install", "chromium"]
-    )
+
+#def ensure_playwright():
+ #   subprocess.check_call(
+  #      [sys.executable, "-m", "playwright", "install", "chromium"]
+   # )
 
 # -------------------------------------------------
 # CRAWL4AI SCRAPER (ASYNC, STABLE)
 # -------------------------------------------------
-async def crawl4ai_fetch(url: str) -> str:
-    browser_config = BrowserConfig(
-        headless=True,
-        browser_type="chromium"
-    )
+#async def crawl4ai_fetch(url: str) -> str:
+#   browser_config = BrowserConfig(
+ #       headless=True,
+  #      browser_type="chromium"
+   # )
 
-    run_config = CrawlerRunConfig(
-        remove_overlay_elements=True,
-        process_iframes=False,
-        cache_mode=CacheMode.BYPASS,
-        word_count_threshold=10,
+#    run_config = CrawlerRunConfig(
+#        remove_overlay_elements=True,
+#        process_iframes=False,
+#        cache_mode=CacheMode.BYPASS,
+#        word_count_threshold=10,
 
         # IMPORTANT: safe args only
-        wait_until="domcontentloaded",
-        page_timeout=90_000
-    )
+#        wait_until="domcontentloaded",
+#        page_timeout=90_000
+#    )
 
-    async with AsyncWebCrawler(config=browser_config) as crawler:
-        result = await crawler.arun(url=url, config=run_config)
+#    async with AsyncWebCrawler(config=browser_config) as crawler:
+#        result = await crawler.arun(url=url, config=run_config)
 
-        if not result.success:
-            return f"Error scraping page: {result.error_message}"
+#        if not result.success:
+#            return f"Error scraping page: {result.error_message}"
 
-        text = (
-            result.markdown.fit_markdown
-            if hasattr(result.markdown, "fit_markdown")
-            else result.markdown
-        )
+#        text = (
+#            result.markdown.fit_markdown
+#            if hasattr(result.markdown, "fit_markdown")
+#            else result.markdown
+#        )
 
-        return text
+#        return text
         
-def extract_relevant_text(raw_text: str, url: str) -> str:
-    lines = [l.strip() for l in raw_text.splitlines() if l.strip()]
+#def extract_relevant_text(raw_text: str, url: str) -> str:
+#    lines = [l.strip() for l in raw_text.splitlines() if l.strip()]
 
-    blocks = []
-    current = []
+#    blocks = []
+#    current = []
 
     # 1️⃣ Build paragraph blocks
-    for line in lines:
-        if len(line) < 5:
-            if current:
-                blocks.append(" ".join(current))
-                current = []
-        else:
-            current.append(line)
+#    for line in lines:
+#        if len(line) < 5:
+#            if current:
+#                blocks.append(" ".join(current))
+#                current = []
+#        else:
+#            current.append(line)
 
-    if current:
-        blocks.append(" ".join(current))
+#    if current:
+#        blocks.append(" ".join(current))
 
-    filtered = []
+#    filtered = []
 
     # 2️⃣ Site-aware filtering
-    if "imdb.com" in url:
-        for b in blocks:
-            if len(b) > 80 and not b.lower().startswith("helpful"):
-                filtered.append(b)
+#    if "imdb.com" in url:
+#        for b in blocks:
+#            if len(b) > 80 and not b.lower().startswith("helpful"):
+#                filtered.append(b)
 
-    elif any(site in url for site in ["amazon.", "flipkart.", "myntra."]):
-        for b in blocks:
-            if len(b) > 60 and "out of 5" not in b.lower():
-                filtered.append(b)
+#    elif any(site in url for site in ["amazon.", "flipkart.", "myntra."]):
+#        for b in blocks:
+#            if len(b) > 60 and "out of 5" not in b.lower():
+#                filtered.append(b)
 
-    elif any(site in url for site in ["twitter.com", "x.com"]):
-        for b in blocks:
-            if len(b) > 20 and not b.startswith("@"):
-                filtered.append(b)
+#    elif any(site in url for site in ["twitter.com", "x.com"]):
+#        for b in blocks:
+#            if len(b) > 20 and not b.startswith("@"):
+#                filtered.append(b)
 
-    elif "reddit.com" in url:
-        for b in blocks:
-            if len(b) > 40 and not b.lower().startswith("level"):
-                filtered.append(b)
+#    elif "reddit.com" in url:
+#        for b in blocks:
+#            if len(b) > 40 and not b.lower().startswith("level"):
+#                filtered.append(b)
 
-    else:
+#    else:
         # 🔥 Generic fallback
-        for b in blocks:
-            if len(b) > 80:
-                filtered.append(b)
+#        for b in blocks:
+#            if len(b) > 80:
+#                filtered.append(b)
 
     # 3️⃣ Absolute fallback (VERY IMPORTANT)
-    if not filtered:
-        filtered = [b for b in blocks if len(b) > 100]
+#    if not filtered:
+#        filtered = [b for b in blocks if len(b) > 100]
 
-    if not filtered:
-        return ""
+#    if not filtered:
+#        return ""
 
     # 4️⃣ Deduplicate while preserving order
-    seen = set()
-    unique = []
-    for b in filtered:
-        if b not in seen:
-            unique.append(b)
-            seen.add(b)
+#    seen = set()
+#    unique = []
+#    for b in filtered:
+#        if b not in seen:
+#            unique.append(b)
+#            seen.add(b)
 
-    return "\n\n".join(unique)
+#    return "\n\n".join(unique)
 
-async def universal_review_scraper(url: str) -> str:
-    raw = await crawl4ai_fetch(url)
+#async def universal_review_scraper(url: str) -> str:
+#    raw = await crawl4ai_fetch(url)
 
-    if raw.startswith("Error"):
-        return raw
+#    if raw.startswith("Error"):
+#        return raw
 
-    clean = extract_relevant_text(raw, url)
+#    clean = extract_relevant_text(raw, url)
 
-    if not clean.strip():
-        return "Error: No review or post text found."
+#    if not clean.strip():
+#        return "Error: No review or post text found."
 
-    return clean
-"""
+#    return clean
+
 # -------------------------------------------------
 # STREAMLIT UI
 # -------------------------------------------------
@@ -177,25 +177,25 @@ if st.button("Analyze Emotion"):
     if not url:
         st.warning("Please enter a URL.")
         st.stop()
-"""
-    with st.spinner("Ensuring Playwright is available..."):
-        try:
-            ensure_playwright()
-        except Exception as e:
-            st.error(f"Playwright install failed: {e}")
-            st.stop()
+#
+#    with st.spinner("Ensuring Playwright is available..."):
+#        try:
+#            ensure_playwright()
+#        except Exception as e:
+#            st.error(f"Playwright install failed: {e}")
+#            st.stop()
 
-    with st.spinner("Scraping webpage with crawl4ai..."):
-        scraped_content = loop.run_until_complete(
-    universal_review_scraper(url)
-)
-    if scraped_content.startswith("Error"):
-        st.error(scraped_content)
-        st.stop()
+#    with st.spinner("Scraping webpage with crawl4ai..."):
+#        scraped_content = loop.run_until_complete(
+#    universal_review_scraper(url)
+#)
+#    if scraped_content.startswith("Error"):
+#        st.error(scraped_content)
+#        st.stop()
 
-    st.subheader("Scraped Content")
-    st.markdown(scraped_content)
-"""
+#    st.subheader("Scraped Content")
+#    st.markdown(scraped_content)
+
 with st.spinner("Predicting emotion..."):
     try:
         emotion = predict_emotion(
