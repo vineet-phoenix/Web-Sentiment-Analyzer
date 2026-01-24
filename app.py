@@ -169,13 +169,13 @@ st.title("Web Content Emotion Analyzer (crawl4ai)")
 st.write("JS-aware scraping using crawl4ai + Playwright")
 
 url = st.text_area(
-    "Enter URL",
+    "Enter Text",
     height=100
 )
 
 if st.button("Analyze Emotion"):
     if not url:
-        st.warning("Please enter a URL.")
+        st.warning("Please enter Text.")
         st.stop()
 #
 #    with st.spinner("Ensuring Playwright is available..."):
@@ -197,18 +197,18 @@ if st.button("Analyze Emotion"):
 #    st.markdown(scraped_content)
 
 with st.spinner("Predicting emotion..."):
-    try:
-        emotion = predict_emotion(
-            url,
-            loaded_model,
-            loaded_tokenizer
-        )
-    
-        if isinstance(emotion, str) and emotion.startswith("Error"):
-            st.error(emotion)
-        else:
-            st.subheader("Predicted Emotion")
-            st.success(emotion)
-    
-    except Exception as e:
-        st.error(f"Prediction failed: {e}")
+  try:
+      emotion = predict_emotion(
+          url,
+          loaded_model,
+          loaded_tokenizer
+      )
+
+#      if isinstance(emotion, str) and emotion.startswith("Error"):
+ #         st.error(emotion)
+  #    else:
+      st.subheader("Predicted Emotion")
+      st.success(emotion)
+
+  except Exception as e:
+      st.error(f"Prediction failed: {e}")
