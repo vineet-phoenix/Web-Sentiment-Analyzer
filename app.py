@@ -196,19 +196,19 @@ if st.button("Analyze Emotion"):
     st.subheader("Scraped Content")
     st.markdown(scraped_content)
 """
-    with st.spinner("Predicting emotion..."):
-        try:
-            emotion = predict_emotion(
-                url,
-                loaded_model,
-                loaded_tokenizer
-            )
-
-            if isinstance(emotion, str) and emotion.startswith("Error"):
-                st.error(emotion)
-            else:
-                st.subheader("Predicted Emotion")
-                st.success(emotion)
-
-        except Exception as e:
-            st.error(f"Prediction failed: {e}")
+with st.spinner("Predicting emotion..."):
+    try:
+        emotion = predict_emotion(
+            url,
+            loaded_model,
+            loaded_tokenizer
+        )
+    
+        if isinstance(emotion, str) and emotion.startswith("Error"):
+            st.error(emotion)
+        else:
+            st.subheader("Predicted Emotion")
+            st.success(emotion)
+    
+    except Exception as e:
+        st.error(f"Prediction failed: {e}")
